@@ -140,7 +140,7 @@ python benchmark_runner.py --benchmark resnet50 --flags "--fp16" --dry-run
 ## Implementation Notes
 
 * **Dynamic ONNX Inputs**: Handles `-1` dynamic dimensions for batch size and sequence length.
-* **FP16 Conversion**: TensorRT engine supports optional FP16 precision; warnings are surfaced for subnormal values and potential layernorm overflows.
+* **FP16 Conversion**: TensorRT engine supports optional FP16 precision, and warnings are surfaced for subnormal values and potential layernorm overflows.
 * **Large File Handling**: Xet integration allows download of models >500 MB efficiently, avoiding GitHub LFS limitations.
 * **Logging**: Each benchmark run logs all stdout and stderr to `logs/<benchmark>_<timestamp>.log` with parsing for key metrics.
 
@@ -158,9 +158,10 @@ python benchmark_runner.py --benchmark resnet50 --flags "--fp16" --dry-run
 ## Project Highlights
 
 * Demonstrates **AI model deployment and benchmarking skills** using GPU acceleration and TensorRT.
-* Showcases **software engineering best practices**: modularity, logging, CLI usability, and error handling.
-* Handles **real-world AI/robotics model challenges**: large model size, numerical precision, dynamic input shapes, and reproducible performance testing.
-* Illustrates ability to **bridge AI research and engineering**, valuable for frontier AI & robotics development.
+* Showcases **software engineering best practices** through modular design, structured logging, CLI usability, and robust error handling.
+* Addresses **real-world AI challenges** including large model sizes, mixed precision, dynamic input shapes, and reproducible performance evaluation.
+* Automates **AI model benchmarking, logging, and performance summarization** across multiple model architectures (e.g., ResNet, BERT).
+
 
 ---
 
