@@ -1,4 +1,3 @@
-# benchmarks/bert_benchmark.py (robust, dynamic-safe)
 import os
 import argparse
 import tensorrt as trt
@@ -40,7 +39,6 @@ def ensure_bert_onnx(model_path="models/bert.onnx"):
         os.replace(local, model_path)
     print("Download complete:", model_path)
 
-# Call it early in your script
 ensure_bert_onnx("models/bert.onnx")
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
@@ -103,13 +101,12 @@ def benchmark(engine, iterations=20, batch_size=1, seq_len=128):
     input_indices = [i for i, b in enumerate(is_input) if b]
 
     # Set concrete shapes
-    # Set concrete shapes using the recommended API
     for i in input_indices:
         name = tensor_names[i]
-        shape = tuple(context.get_tensor_shape(name))  # <-- new API
+        shape = tuple(context.get_tensor_shape(name))
         # Replace -1 with batch_size or seq_len
         concrete = tuple((batch_size if j == 0 else seq_len if s == -1 else s) for j, s in enumerate(shape))
-        context.set_input_shape(name, concrete)  # <-- new API
+        context.set_input_shape(name, concrete)
 
     concrete_shapes = [tuple(context.get_tensor_shape(name)) for name in tensor_names]
 

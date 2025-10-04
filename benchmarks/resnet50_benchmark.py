@@ -1,4 +1,3 @@
-# benchmarks/resnet50_benchmark.py (robust, corrected)
 import os
 import argparse
 import tensorrt as trt
@@ -39,14 +38,14 @@ def build_engine(onnx_file_path, fixed_input_shape=(1, 3, 224, 224), use_fp16=Tr
         if use_fp16 and builder.platform_has_fast_fp16:
             config.set_flag(trt.BuilderFlag.FP16)
 
-        # Create an optimization profile for dynamic inputs (if any)
+        # Create an optimization profile for any dynamic inputs
         profile = builder.create_optimization_profile()
         for i in range(network.num_inputs):
             input_tensor = network.get_input(i)
             input_name = input_tensor.name
             shape = tuple(input_tensor.shape)  # may contain -1
-            # Build min/opt/max shapes: replace -1 with values from fixed_input_shape where reasonable
-            # If model has multiple inputs, we try to use fixed_input_shape for the first input and copy dims for others.
+            # Build min/opt/max shapes, replace -1 with values from fixed_input_shape where reasonable
+            # If model has multiple inputs, try to use fixed_input_shape for the first input and copy dims for others
             def replace_dynamic(s, fallback):
                 return tuple((fallback[j] if dim == -1 else dim) for j, dim in enumerate(s))
 
@@ -55,7 +54,7 @@ def build_engine(onnx_file_path, fixed_input_shape=(1, 3, 224, 224), use_fp16=Tr
                 opt_shape = min_shape
                 max_shape = min_shape
             else:
-                # fallback: replace all -1 with 1 for min, opt, and 2 for max where unknown
+                # fallback is to replace all -1 with 1 for min, opt, and 2 for max where unknown
                 min_shape = tuple((1 if d == -1 else d) for d in shape)
                 opt_shape = tuple((max(1, d) if d == -1 else d) for d in shape)
                 max_shape = tuple((2 if d == -1 else d) for d in shape)
@@ -89,22 +88,22 @@ def benchmark(engine, iterations=20, batch_size=1):
     num_bindings = engine.num_bindings
     tensor_names = [engine.get_tensor_name(i) for i in range(num_bindings)]
     is_input = [engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT for name in tensor_names]
-    # choose first input index for setting concrete shape (common case)
+    # choose first input index for setting concrete shape
     input_indices = [i for i, b in enumerate(is_input) if b]
     if not input_indices:
         raise RuntimeError("No input bindings found")
 
     # For simplicity set concrete shape for all input bindings using context.set_binding_shape
     for i in input_indices:
-        # if the input shape is dynamic, we must set it
+        # if input shape is dynamic, we must set it
         name = engine.get_tensor_name(i)
         shape = engine.get_tensor_shape(name)
-        # shape may contain -1; create a concrete shape: prefer (batch_size, 3, 224, 224) for first input
+        # shape may contain -1, so create a concrete shape, prefer (batch_size, 3, 224, 224) for first input
         if any([s == -1 for s in shape]):
             if i == input_indices[0] and len(shape) == 4:
                 concrete = (batch_size, 3, 224, 224)
             else:
-                # fallback: replace -1 with 1
+                # fallback, replace -1 with 1
                 concrete = tuple((batch_size if j == 0 else (1 if s == -1 else s)) for j, s in enumerate(shape))
             context.set_binding_shape(i, concrete)
         else:
@@ -113,7 +112,7 @@ def benchmark(engine, iterations=20, batch_size=1):
 
     # After setting shapes, query concrete shapes for all bindings
     concrete_shapes = [tuple(context.get_tensor_shape(name)) for name in tensor_names]
-    # Prepare host & device buffers for every binding in engine order
+    # Prepare host/device buffers for every binding in engine order
     host_buffers = [None] * num_bindings
     device_buffers = [None] * num_bindings
 
@@ -121,10 +120,9 @@ def benchmark(engine, iterations=20, batch_size=1):
         shape = concrete_shapes[i]
         dtype = dtype_for_binding(engine, i)
         el_count = size_from_shape(shape)
-        # create host array (for inputs we populate random data; for outputs we empty-allocate)
+        # create host array, for inputs we populate random data, for outputs we empty-allocate
         if is_input[i]:
             if dtype == np.int32:
-                # e.g. token ids — use small integer range
                 host = np.random.randint(0, 255, size=shape, dtype=np.int32)
             else:
                 host = np.random.random(shape).astype(dtype)
@@ -164,7 +162,7 @@ def benchmark(engine, iterations=20, batch_size=1):
         cuda.memcpy_dtoh(host_buffers[out_idx], device_buffers[out_idx])
         print("Sample output shape:", host_buffers[out_idx].shape, "dtype:", host_buffers[out_idx].dtype)
 
-    # ---- memory safety: free device buffers explicitly ----
+    # memory safety, free device buffers explicitly
     for buf in device_buffers:
         buf.free()
 
