@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Simple runner to pick and execute benchmark scripts in the benchmarks/ folder.
 
@@ -7,7 +6,7 @@ Usage examples:
   - Run resnet50 interactively: python benchmark_runner.py --interactive
   - Run bert non-interactive with flags: python benchmark_runner.py --benchmark bert --flags "--fp16 --seq_len=128"
 
-This script does not import TensorRT or CUDA — it just shells out to the chosen benchmark
+This script does not import TensorRT or CUDA, it just shells out to the chosen benchmark
 script using the same Python interpreter by default.
 """
 import os
@@ -16,6 +15,8 @@ import argparse
 import subprocess
 import shlex
 from textwrap import indent
+import re
+import datetime
 
 
 def find_benchmarks(dir_path="benchmarks"):
@@ -39,7 +40,7 @@ KNOWN_FLAGS = {
 def validate_flags(bench_name, tokens):
     """Basic validation of flags we will forward to the benchmark.
 
-    tokens is a list as returned by shlex.split; this accepts '--seq_len 128' or '--seq_len=128'.
+    tokens is a list as returned by shlex.split, this accepts '--seq_len 128' or '--seq_len=128'
     """
     allowed = KNOWN_FLAGS.get(bench_name, [])
     i = 0
@@ -79,9 +80,7 @@ def main(argv=None):
     parser.add_argument("--list", action="store_true", help="List available benchmarks and exit")
     parser.add_argument("--interactive", action="store_true", help="Interactively choose a benchmark and flags")
     parser.add_argument("--benchmark", type=str, help="Benchmark to run (name of the script without _benchmark.py)")
-    parser.add_argument(
-        "--flags", nargs=argparse.REMAINDER, default=[], help="Flags to forward to the benchmark script"
-    )
+    parser.add_argument("--flags", nargs=argparse.REMAINDER, default=[], help="Flags to forward to the benchmark script")
     parser.add_argument("--python", type=str, default=sys.executable, help="Python executable to use for running the benchmark")
     parser.add_argument("--dry-run", action="store_true", help="Print the command that would be run and exit")
     parser.add_argument("--log-dir", type=str, default="logs", help="Directory to write benchmark logs into")
@@ -92,7 +91,6 @@ def main(argv=None):
     benches = find_benchmarks()
 
     def parse_log_file(log_path):
-        import re
         avg_re = re.compile(r"Average inference time over\s*(\d+)\s*iters:\s*([0-9.]+)\s*ms")
         sample_re = re.compile(r"Sample output shape:\s*(\S.*)\s+dtype:\s*(\S+)")
 
@@ -193,43 +191,8 @@ def main(argv=None):
         print("Failed to parse flags:", e)
         return 3
 
-    # Normalize tokens: allow users to write 'lazy' or 'fp16' instead of '--lazy' or '--fp16'
-    def normalize_tokens(tokens, bench_name):
-        allowed = KNOWN_FLAGS.get(bench_name, [])
-        allowed_short = set(k.lstrip("-") for k in allowed)
-        out = []
-        i = 0
-        while i < len(tokens):
-            t = tokens[i]
-            if t.startswith("--"):
-                out.append(t)
-            elif t.startswith("-"):
-                # single dash -> convert to double dash
-                out.append("--" + t.lstrip("-"))
-            elif "=" in t:
-                key, val = t.split("=", 1)
-                if not key.startswith("--"):
-                    key = "--" + key
-                out.append(f"{key}={val}")
-            elif t.isdigit():
-                # numeric token: treat as a value
-                out.append(t)
-            elif t in allowed_short:
-                out.append("--" + t)
-            else:
-                # Heuristic: if next token looks like a value, treat this as a flag name
-                if i + 1 < len(tokens) and (tokens[i + 1].isdigit() or "=" in tokens[i + 1]):
-                    out.append("--" + t)
-                else:
-                    # Default to prefixing so users can type 'fp16' friendly
-                    out.append("--" + t)
-            i += 1
-        return out
-
-    norm_tokens = normalize_tokens(tokens, bench_name)
-
     # Only forward tokens that belong to the benchmark for validation
-    bench_tokens = [t for t in norm_tokens if t in KNOWN_FLAGS.get(bench_name, []) or any(t.startswith(k+'=') for k in KNOWN_FLAGS.get(bench_name, []))]
+    bench_tokens = [t for t in tokens if t in KNOWN_FLAGS.get(bench_name, []) or any(t.startswith(k+'=') for k in KNOWN_FLAGS.get(bench_name, []))]
     ok, msg = validate_flags(bench_name, bench_tokens)
     if not ok:
         print("Flag validation failed:", msg)
@@ -245,14 +208,8 @@ def main(argv=None):
     # Ensure log dir exists
     log_dir = args.log_dir
     os.makedirs(log_dir, exist_ok=True)
-    import datetime
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(log_dir, f"{bench_name}_{timestamp}.log")
-
-    if args.dry_run:
-        print("Dry run: command not executed.")
-        print(f"Log would be written to: {log_path}")
-        return 0
 
     # Run benchmark and capture output to log file
     try:
